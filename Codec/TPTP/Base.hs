@@ -4,6 +4,7 @@
   , UndecidableInstances, DeriveDataTypeable, GeneralizedNewtypeDeriving
   , OverlappingInstances, ScopedTypeVariables
   #-}
+{-# LANGUAGE DeriveGeneric #-}
 
 module Codec.TPTP.Base where
 
@@ -17,6 +18,7 @@ module Codec.TPTP.Base where
 
 import Codec.TPTP.QuickCheck
 import Control.Applicative
+import Control.DeepSeq
 import Control.Monad.Identity
 import Control.Monad.State
 import Data.Data
@@ -32,6 +34,7 @@ import Data.Copointed
 #if !MIN_VERSION_transformers(0,4,0)
 import Control.Monad.Trans.Instances () -- Import Eq,Ord,Show,Read,Data,Typeable orphan instances for Data.Functor.Identity from transformers-compat package
 #endif
+import GHC.Generics (Generic)
 
 #if !MIN_VERSION_base(4,7,0)
 import Util
@@ -173,7 +176,11 @@ data Formula0 term formula =
             | PredApp AtomicWord [term] -- ^ Predicate application
             | Quant Quant [V] formula -- ^ Quantified formula
             | (:~:) formula -- ^ Negation
-              deriving (Eq,Ord,Show,Read,Data,Typeable)
+              deriving (Eq,Ord,Show,Read,Data,Typeable,Generic)
+
+instance (NFData term, NFData formula) => NFData (Formula0 term formula)
+
+
 
 
 -- | See <http://haskell.org/haskellwiki/Indirect_composite> for the point of the type parameters (they allow for future decorations). If you don't need decorations, you can just use 'Term' and the wrapped constructors above.
@@ -182,8 +189,9 @@ data Term0 term =
           | NumberLitTerm Rational -- ^ Number literal
           | DistinctObjectTerm String -- ^ Double-quoted item
           | FunApp AtomicWord [term] -- ^ Function symbol application (constants are encoded as nullary functions)
-            deriving (Eq,Ord,Show,Read,Data,Typeable)
+            deriving (Eq,Ord,Show,Read,Data,Typeable,Generic)
 
+instance NFData term => NFData (Term0 term)
 
 
 
@@ -200,17 +208,23 @@ data BinOp =
             |  (:~&:)  -- ^ NAND
             |  (:~|:)  -- ^ NOR
             |  (:<~>:)  -- ^ XOR
-              deriving (Eq,Ord,Show,Read,Data,Typeable,Enum,Bounded)
+              deriving (Eq,Ord,Show,Read,Data,Typeable,Enum,Bounded,Generic)
+
+instance NFData BinOp
 
 -- | /Term -> Term -> Formula/ infix connectives
 data InfixPred =
     -- Please don't change the constructor names (the Show instance is significant)
     (:=:) | (:!=:)
-            deriving (Eq,Ord,Show,Read,Data,Typeable,Enum,Bounded)
+            deriving (Eq,Ord,Show,Read,Data,Typeable,Enum,Bounded,Generic)
+
+instance NFData InfixPred
 
 -- | Quantifier specification
 data Quant = All | Exists
-              deriving (Eq,Ord,Show,Read,Data,Typeable,Enum,Bounded)
+              deriving (Eq,Ord,Show,Read,Data,Typeable,Enum,Bounded,Generic)
+
+instance NFData Quant
 
 -- * Formula Metadata
 
@@ -257,7 +271,6 @@ deriving instance Ord (c (Formula0 (T c) (F c))) => Ord (TPTP_Input_ c)
 deriving instance Show (c (Formula0 (T c) (F c))) => Show (TPTP_Input_ c)
 deriving instance Read (c (Formula0 (T c) (F c))) => Read (TPTP_Input_ c)
 
-
 #if MIN_VERSION_base(4,7,0)
 deriving instance (Typeable c, Data (c (Formula0 (T c) (F c)))) => Data (TPTP_Input_ c)
 deriving instance Typeable TPTP_Input_
@@ -267,17 +280,26 @@ instance Typeable1 c => Typeable (TPTP_Input_ c) where
   typeOf = mkTypeOfForRank2Kind "Codec.TPTP.Base" "TPTP_Input_"
 #endif
 
+deriving instance Generic (TPTP_Input_ c) 
+instance NFData1 c => NFData (TPTP_Input_ c)
+
 -- | Annotations about the formulas origin
 data Annotations = NoAnnotations | Annotations GTerm UsefulInfo
-                  deriving (Eq,Ord,Show,Read,Data,Typeable)
+                  deriving (Eq,Ord,Show,Read,Data,Typeable,Generic)
+
+instance NFData Annotations
 
 -- | Misc annotations
 data UsefulInfo = NoUsefulInfo | UsefulInfo [GTerm]
-                  deriving (Eq,Ord,Show,Read,Data,Typeable)
+                  deriving (Eq,Ord,Show,Read,Data,Typeable,Generic)
+
+instance NFData UsefulInfo
 
 -- | Formula roles
 newtype Role = Role { unrole :: String }
-            deriving (Eq,Ord,Show,Read,Data,Typeable)
+            deriving (Eq,Ord,Show,Read,Data,Typeable,Generic)
+
+instance NFData Role
 
 
 -- | Metadata (the /general_data/ rule in TPTP's grammar)
@@ -287,14 +309,17 @@ data GData = GWord AtomicWord
                  | GNumber Rational
                  | GDistinctObject String
                  | GFormulaData String Formula
-                   deriving (Eq,Ord,Show,Read,Data,Typeable)
+                   deriving (Eq,Ord,Show,Read,Data,Typeable,Generic)
+
+instance NFData GData
 
 -- | Metadata (the /general_term/ rule in TPTP's grammar)
 data GTerm = ColonSep GData GTerm
            | GTerm GData
            | GList [GTerm]
-             deriving (Eq,Ord,Show,Read,Data,Typeable)
+             deriving (Eq,Ord,Show,Read,Data,Typeable,Generic)
 
+instance NFData GTerm
 
 
 
@@ -539,7 +564,9 @@ instance Arbitrary GTerm
 --
 -- Tip: Use the @-XOverloadedStrings@ compiler flag if you don't want to have to type /AtomicWord/ to construct an 'AtomicWord'
 newtype AtomicWord = AtomicWord String
-    deriving (Eq,Ord,Show,Data,Typeable,Read,Semigroup,Monoid,IsString)
+    deriving (Eq,Ord,Show,Data,Typeable,Read,Semigroup,Monoid,IsString,Generic)
+
+instance NFData AtomicWord
 
 instance Arbitrary AtomicWord where
     arbitrary = frequency [  (5, AtomicWord <$> arbLowerWord)
@@ -548,7 +575,9 @@ instance Arbitrary AtomicWord where
 
 -- | Variable names
 newtype V = V String
-    deriving (Eq,Ord,Show,Data,Typeable,Read,Semigroup,Monoid,IsString)
+    deriving (Eq,Ord,Show,Data,Typeable,Read,Semigroup,Monoid,IsString,Generic)
+
+instance NFData V
 
 instance Arbitrary V where
     arbitrary = V <$> arbVar
@@ -564,10 +593,16 @@ instance Arbitrary V where
 -- - @c = 'Maybe'@: Formulae that may contain \"holes\"
 --
 -- - @c = 'IORef'@: (Mutable) formulae with mutable subexpressions
-newtype F c = F { runF :: c (Formula0 (T c) (F c)) }
+newtype F c = F { runF :: c (Formula0 (T c) (F c)) } deriving Generic
+
+instance NFData1 c => NFData (F c) where
+  rnf (F x) = liftRnf rnf x
 
 -- | Terms whose subterms are wrapped in the given type constructor @c@
-newtype T c = T { runT :: c (Term0 (T c)) }
+newtype T c = T { runT :: c (Term0 (T c)) } deriving Generic
+
+instance NFData1 c => NFData (T c) where
+  rnf (T x) = liftRnf rnf x
 
 #define DI(X) deriving instance (X (c (Term0 (T c)))) => X (T c); deriving instance (X (c (Formula0 (T c) (F c)))) => X (F c)
 
