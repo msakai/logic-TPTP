@@ -68,6 +68,7 @@ Library
                    , mtl
                    , pointed
                    , semigroups
+                   , text
                    , transformers
                    , transformers-compat >= 0.5
 
